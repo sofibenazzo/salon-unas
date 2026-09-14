@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated"
+}
+
+datasource db {
+  provider = "sqlserver"
+}
+
+model Usuario {
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  apellido  String
+  email     String   @unique
+  telefono  String?
+  password  String
+  rol       String   @default("CLIENTE")
+  activo    Boolean  @default(true)
+  creadoEn  DateTime @default(now())
+
+  turnos    Turno[]
+}
+
+model Servicio {
+  id          Int      @id @default(autoincrement())
+  nombre      String
+  descripcion String?
+  precio      Decimal  @db.Decimal(10, 2)
+  duracion    Int
+  activo      Boolean  @default(true)
+  creadoEn    DateTime @default(now())
+
+  turnos      Turno[]
+}
+
+model Turno {
+  id          Int      @id @default(autoincrement())
+  fechaHora   DateTime
+  estado      String   @default("PENDIENTE")
+  observacion String?
+  usuarioId   Int
+  servicioId  Int
+  creadoEn    DateTime @default(now())
+
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
+  servicio    Servicio @relation(fields: [servicioId], references: [id])
+}
+
+model HorarioAtencion {
+  id        Int      @id @default(autoincrement())
+  diaSemana Int
+  horaInicio String
+  horaFin String
+  activo    Boolean  @default(true)
+}
