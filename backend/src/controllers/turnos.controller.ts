@@ -131,8 +131,9 @@ export const crearTurno = async (
                 ? 7
                 : fecha.getDay();
 
-        const horario =
-            await prisma.horarioAtencion.findFirst({
+        // Buscar todos los bloques de atención de ese día
+        const horarios =
+            await prisma.horarioAtencion.findMany({
                 where: {
                     diaSemana,
                     activo: true,
@@ -142,7 +143,7 @@ export const crearTurno = async (
                 },
             });
 
-        if (!horario) {
+        if (horarios.length === 0) {
             return res.status(400).json({
                 error: "El salón no atiende ese día",
             });
@@ -150,14 +151,7 @@ export const crearTurno = async (
 
         const fechaTexto = fechaHora.substring(0, 10);
 
-        const inicioHorario = new Date(
-            `${fechaTexto}T${horario.horaInicio}:00`
-        );
-
-        const finHorario = new Date(
-            `${fechaTexto}T${horario.horaFin}:00`
-        );
-
+        // Calcular cuándo terminaría el turno
         const finTurno = new Date(fecha);
 
         finTurno.setMinutes(
@@ -165,15 +159,30 @@ export const crearTurno = async (
             Number(servicio.duracion)
         );
 
-        if (
-            fecha < inicioHorario ||
-            finTurno > finHorario
-        ) {
+        // Verificar que el turno completo entre
+        // dentro de alguno de los bloques de atención
+        const turnoDentroDeHorario = horarios.some((horario) => {
+            const inicioHorario = new Date(
+                `${fechaTexto}T${horario.horaInicio}:00`
+            );
+
+            const finHorario = new Date(
+                `${fechaTexto}T${horario.horaFin}:00`
+            );
+
+            return (
+                fecha >= inicioHorario &&
+                finTurno <= finHorario
+            );
+        });
+
+        if (!turnoDentroDeHorario) {
             return res.status(400).json({
                 error: "El turno está fuera del horario de atención",
             });
         }
 
+        // Buscar turnos existentes ese día
         const inicioDia = new Date(
             `${fechaTexto}T00:00:00`
         );
@@ -198,6 +207,7 @@ export const crearTurno = async (
                 },
             });
 
+        // Verificar que no se superponga con otro turno
         const existeSuperposicion =
             turnosExistentes.some((turno) => {
                 const inicioExistente =
@@ -223,6 +233,7 @@ export const crearTurno = async (
             });
         }
 
+        // Crear el turno
         const turno = await prisma.turno.create({
             data: {
                 fechaHora: fecha,

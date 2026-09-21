@@ -60,8 +60,8 @@ export const obtenerDisponibilidad = async (
                 ? 7
                 : fechaSeleccionada.getDay();
 
-        const horario =
-            await prisma.horarioAtencion.findFirst({
+        const horarios =
+            await prisma.horarioAtencion.findMany({
                 where: {
                     diaSemana,
                     activo: true,
@@ -71,10 +71,16 @@ export const obtenerDisponibilidad = async (
                 },
             });
 
-        if (!horario) {
+        if (horarios.length === 0) {
             return res.json({
                 fecha,
                 servicioId,
+                servicio: {
+                    id: servicio.id,
+                    nombre: servicio.nombre,
+                    duracion: servicio.duracion,
+                },
+                horarioAtencion: [],
                 horariosDisponibles: [],
             });
         }
@@ -100,68 +106,69 @@ export const obtenerDisponibilidad = async (
             },
         });
 
-        const inicioHorario = new Date(
-            `${fecha}T${horario.horaInicio}:00`
-        );
-
-        const finHorario = new Date(
-            `${fecha}T${horario.horaFin}:00`
-        );
-
         const duracionServicio = Number(servicio.duracion);
-
         const horariosDisponibles: string[] = [];
 
-        for (
-            let hora = new Date(inicioHorario);
-            hora < finHorario;
-            hora.setMinutes(hora.getMinutes() + 15)
-        ) {
-            const inicioTurno = new Date(hora);
-
-            const finTurno = new Date(hora);
-
-            finTurno.setMinutes(
-                finTurno.getMinutes() + duracionServicio
+        for (const horario of horarios) {
+            const inicioHorario = new Date(
+                `${fecha}T${horario.horaInicio}:00`
             );
 
-            if (finTurno > finHorario) {
-                continue;
-            }
+            const finHorario = new Date(
+                `${fecha}T${horario.horaFin}:00`
+            );
 
-            const ahora = new Date();
-
-            if (
-                fecha === ahora.toISOString().slice(0, 10) &&
-                inicioTurno <= ahora
+            for (
+                let hora = new Date(inicioHorario);
+                hora < finHorario;
+                hora.setMinutes(hora.getMinutes() + 15)
             ) {
-                continue;
-            }
+                const inicioTurno = new Date(hora);
 
-            const ocupado = turnos.some((turno) => {
-                const inicioExistente =
-                    new Date(turno.fechaHora);
+                const finTurno = new Date(hora);
 
-                const finExistente =
-                    new Date(turno.fechaHora);
-
-                finExistente.setMinutes(
-                    finExistente.getMinutes() +
-                    Number(turno.servicio.duracion)
+                finTurno.setMinutes(
+                    finTurno.getMinutes() + duracionServicio
                 );
 
-                return (
-                    inicioTurno < finExistente &&
-                    finTurno > inicioExistente
-                );
-            });
+                if (finTurno > finHorario) {
+                    continue;
+                }
 
-            if (!ocupado) {
-                horariosDisponibles.push(
-                    inicioTurno
-                        .toTimeString()
-                        .slice(0, 5)
-                );
+                const ahora = new Date();
+
+                if (
+                    fecha === ahora.toISOString().slice(0, 10) &&
+                    inicioTurno <= ahora
+                ) {
+                    continue;
+                }
+
+                const ocupado = turnos.some((turno) => {
+                    const inicioExistente =
+                        new Date(turno.fechaHora);
+
+                    const finExistente =
+                        new Date(turno.fechaHora);
+
+                    finExistente.setMinutes(
+                        finExistente.getMinutes() +
+                        Number(turno.servicio.duracion)
+                    );
+
+                    return (
+                        inicioTurno < finExistente &&
+                        finTurno > inicioExistente
+                    );
+                });
+
+                if (!ocupado) {
+                    horariosDisponibles.push(
+                        inicioTurno
+                            .toTimeString()
+                            .slice(0, 5)
+                    );
+                }
             }
         }
 
@@ -173,10 +180,10 @@ export const obtenerDisponibilidad = async (
                 nombre: servicio.nombre,
                 duracion: servicio.duracion,
             },
-            horarioAtencion: {
+            horarioAtencion: horarios.map((horario) => ({
                 inicio: horario.horaInicio,
                 fin: horario.horaFin,
-            },
+            })),
             horariosDisponibles,
         });
     } catch (error) {
@@ -189,4 +196,4 @@ export const obtenerDisponibilidad = async (
             error: "No se pudo obtener la disponibilidad",
         });
     }
-}; 
+};
